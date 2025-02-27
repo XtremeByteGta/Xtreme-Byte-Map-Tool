@@ -3,10 +3,9 @@ import os
 import bmesh
 from .dff import dff
 
-# Функция для парсинга IPL файла (импорт) с проверкой дубликатов ID и комментариев
+# Функция для парсинга IPL файла (импорт) с улучшенной обработкой комментариев и ошибок
 def parse_ipl(ipl_path):
     objects = []
-    id_set = set()  # Множество для отслеживания ID
     with open(ipl_path, 'r') as file:
         lines = file.readlines()
         in_inst_section = False
@@ -24,22 +23,19 @@ def parse_ipl(ipl_path):
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) >= 10:
                     try:
-                        obj_id = int(parts[0])
-                        if obj_id in id_set:
-                            print(f"Строка {i+1}: Дубликат ID {obj_id} для {parts[1]}")
-                        id_set.add(obj_id)
+                        obj_id = int(parts[0])  # Проверяем, что ID — это число
                         obj = {
                             'id': parts[0],
                             'model_name': parts[1],
                             'interior': parts[2],
                             'pos': (float(parts[3]), float(parts[4]), float(parts[5])),
                             'rot': (float(parts[9]), float(parts[6]), float(parts[7]), float(parts[8])),
-                            'lod': parts[10] if len(parts) > 10 else '-1'
+                            'lod': parts[10] if len(parts) > 10 else ''
                         }
                         objects.append(obj)
                         print(f"Строка {i+1}: Успешно распарсен объект {obj['model_name']} с ID {obj['id']}")
                     except ValueError as e:
-                        print(f"Ошибка в строке {i+1}: {line} — {e}")
+                        print(f"Ошибка в строке {i+1}: {line} — {e}. Строка пропущена.")
                 else:
                     print(f"Строка {i+1} пропущена: недостаточно данных ({len(parts)} частей): {line}")
             elif in_inst_section and '#' in line:
@@ -51,18 +47,14 @@ def parse_ipl(ipl_path):
 def import_dff(model_name, dff_folder):
     dff_path = os.path.join(dff_folder, model_name + '.dff')
     if not os.path.exists(dff_path):
-        print(f"Ошибка: Модель {model_name} не найдена по пути {dff_path}")
+        print(f"Модель {model_name} не найдена по пути {dff_path}")
         return None
 
-    try:
-        dff_loader = dff()
-        dff_loader.load_file(dff_path)
-    except Exception as e:
-        print(f"Ошибка загрузки DFF {model_name}: {e}")
-        return None
+    dff_loader = dff()
+    dff_loader.load_file(dff_path)
 
     if not dff_loader.geometry_list:
-        print(f"Ошибка: Не удалось загрузить геометрию из {model_name}")
+        print(f"Не удалось загрузить геометрию из {model_name}")
         return None
 
     geometry = dff_loader.geometry_list[0]
@@ -82,7 +74,6 @@ def import_dff(model_name, dff_folder):
 
     bm.to_mesh(mesh)
     bm.free()
-    print(f"Успешно загружена модель {model_name}")
     return obj
 
 # Функция для размещения объектов в сцене (импорт) — без масштабирования
@@ -96,19 +87,12 @@ def place_objects(objects, dff_folder):
             obj.rotation_quaternion = obj_data['rot']
             obj['id'] = int(obj_data['id'])
             obj['interior'] = int(obj_data['interior'])
-            obj['lod'] = int(obj_data['lod']) if obj_data['lod'] != '-1' else -1
+            obj['lod'] = int(obj_data['lod']) if obj_data['lod'] else -1
             bpy.context.collection.objects.link(obj)
-            print(f"Объект {model_name} размещён на {obj.location}")
-        else:
-            # Вместо создания пустого объекта просто пропускаем и логируем
-            print(f"Не удалось загрузить {model_name} из DFF, объект не создан (должен быть на {obj_data['pos']})")
 
-# Функция для экспорта IPL с проверкой дубликатов ID — без масштабирования
+# Функция для экспорта IPL — без масштабирования
 def export_ipl(ipl_path, objects, lod_autosearch=False):
     lod_dict = {}
-    id_set = set()  # Множество для проверки дубликатов ID
-    duplicate_ids = []
-
     if lod_autosearch:
         for obj in objects:
             if obj.name.lower().startswith('lod'):
@@ -120,51 +104,32 @@ def export_ipl(ipl_path, objects, lod_autosearch=False):
         for i, obj in enumerate(objects):
             if 'id' not in obj:
                 continue
-            obj_id = obj['id']
-            if obj_id in id_set:
-                duplicate_ids.append(obj_id)
-            else:
-                id_set.add(obj_id)
-                model_name = obj.name
-                pos = (obj.location.x, obj.location.y, obj.location.z)  # Оригинальные координаты
-                rot = obj.rotation_quaternion
-                interior = obj.get('interior', 0)
-                lod_index = obj.get('lod', -1)
-                if lod_autosearch and model_name in lod_dict:
-                    lod_index = lod_dict[model_name].get('id', -1)
-                line = f"{obj_id}, {model_name}, {interior}, {pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}, {rot[1]:.6f}, {rot[2]:.6f}, {rot[3]:.6f}, {rot[0]:.6f}, {lod_index}\n"
-                file.write(line)
+            model_name = obj.name
+            pos = (obj.location.x, obj.location.y, obj.location.z)  # Оригинальные координаты
+            rot = obj.rotation_quaternion
+            interior = obj.get('interior', 0)
+            lod_index = obj.get('lod', -1)
+            if lod_autosearch and model_name in lod_dict:
+                lod_index = lod_dict[model_name].get('id', -1)
+            line = f"{obj['id']}, {model_name}, {interior}, {pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}, {rot[1]:.6f}, {rot[2]:.6f}, {rot[3]:.6f}, {rot[0]:.6f}, {lod_index}\n"
+            file.write(line)
         file.write("end\n")
-    
-    if duplicate_ids:
-        raise ValueError(f"Обнаружены дубликаты ID при экспорте IPL: {duplicate_ids}")
     print(f"Экспортировано {len(objects)} объектов в IPL: {ipl_path}")
 
-# Функция для экспорта IDE с проверкой дубликатов ID
+# Функция для экспорта IDE
 def export_ide(ide_path, objects):
-    id_set = set()  # Множество для проверки дубликатов ID
-    duplicate_ids = []
-
     with open(ide_path, 'w') as file:
         file.write("objs\n")
         for obj in objects:
             if 'id' not in obj:
                 continue
-            obj_id = obj['id']
-            if obj_id in id_set:
-                duplicate_ids.append(obj_id)
-            else:
-                id_set.add(obj_id)
-                model_name = obj.name
-                txd_name = obj.get('txd_name', f"{model_name}_tex")
-                distance = obj.get('distance', 300.0)
-                flags = obj.get('flag', 0)
-                line = f"{obj_id}, {model_name}, {txd_name}, {distance:.1f}, {flags}\n"
-                file.write(line)
+            model_name = obj.name
+            txd_name = obj.get('txd_name', f"{model_name}_tex")
+            distance = obj.get('distance', 300.0)
+            flags = obj.get('flag', 0)
+            line = f"{obj['id']}, {model_name}, {txd_name}, {distance:.1f}, {flags}\n"
+            file.write(line)
         file.write("end\n")
-    
-    if duplicate_ids:
-        raise ValueError(f"Обнаружены дубликаты ID при экспорте IDE: {duplicate_ids}")
     print(f"Экспортировано {len(objects)} объектов в IDE: {ide_path}")
 
 # Функция проверки ошибок
@@ -186,70 +151,55 @@ def check_errors(objects):
 
     return errors, warnings
 
-# Панель на N-панели
-class GTA_SA_IPL_PT_Panel(bpy.types.Panel):
-    bl_label = "GTA SA IPL Importer"
-    bl_idname = "GTA_PT_SA_IPL"
+# Панель на N-панели с новым названием "Xtreme Byte" и уникальным интерфейсом
+class Xtreme_Byte_PT_Panel(bpy.types.Panel):
+    bl_label = "Xtreme Byte"
+    bl_idname = "XTREME_PT_BYTE"
     bl_space_type = "VIEW_3D"
     bl_region_type = "UI"
-    bl_category = "GTA SA IPL"
-    
+    bl_category = "Xtreme Tools"
+
     def draw(self, context):
         layout = self.layout
         scene = context.scene
-        
-        # Part 1: ID Setup
+
+        # Секция "Настройка объектов" (аналог Part 1)
         box = layout.box()
-        box.label(text="Part 1: ID Setup")
-        box.prop(scene, "id_start", text="ID Start")
-        box.operator("gta.set_values", text="Set Values")
-        
-        # Part 2: Parameters
+        box.label(text="Настройка объектов", icon='OBJECT_DATA')
+        box.prop(scene, "id_start", text="Начальный ID")
+        box.operator("gta.set_values", text="Применить настройки")
+
+        # Секция "Параметры моделей" (аналог Part 2)
         box = layout.box()
-        box.label(text="Part 2: Parameters")
-        
+        box.label(text="Параметры моделей", icon='MODIFIER')
+        col = box.column(align=True)
+        col.prop(scene, "txd_name", text="Имя TXD")
+        col.prop(scene, "interior", text="Интерьер")
+        col.prop(scene, "distance", text="Дистанция")
+        col.prop(scene, "flag", text="Флаг")
+        col.prop(scene, "lod_start", text="Начало LOD")
+
         row = box.row()
-        row.prop(scene, "txd_name", text="TXD Name")
-        row.operator("gta.get_txd", text="GET")
-        row.operator("gta.set_txd", text="SET")
-        
-        row = box.row()
-        row.prop(scene, "interior", text="Interior")
-        row.operator("gta.get_interior", text="GET")
-        row.operator("gta.set_interior", text="SET")
-        
-        row = box.row()
-        row.prop(scene, "distance", text="Distance")
-        row.operator("gta.get_distance", text="GET")
-        row.operator("gta.set_distance", text="SET")
-        
-        row = box.row()
-        row.prop(scene, "flag", text="Flag")
-        row.operator("gta.get_flag", text="GET")
-        row.operator("gta.set_flag", text="SET")
-        
-        row = box.row()
-        row.prop(scene, "lod_start", text="LOD Start")
-        row.operator("gta.get_lod_start", text="GET")
-        row.operator("gta.set_lod_start", text="SET")
-        
-        row = box.row()
-        row.operator("gta.get_all", text="GET ALL")
-        row.operator("gta.reset_all", text="Re Set All Values")
-        
-        # Part 3: Export & Check
+        row.operator("gta.get_all", text="Получить все")
+        row.operator("gta.reset_all", text="Сбросить все")
+
+        # Секция "Импорт/Экспорт" (аналог Part 3)
         box = layout.box()
-        box.label(text="Part 3: Export & Check")
-        box.prop(scene, "ipl_path", text="IPL File")
-        box.prop(scene, "dff_folder", text="DFF Folder")
-        box.operator("import.ipl", text="Import IPL")
-        box.prop(scene, "export_ipl_path", text="Export IPL File")
-        box.prop(scene, "export_ide_path", text="Export IDE File")
-        box.prop(scene, "lod_autosearch", text="LOD AutoSearch")
+        box.label(text="Импорт и Экспорт", icon='FILE')
+        box.prop(scene, "ipl_path", text="Путь к IPL")
+        box.prop(scene, "dff_folder", text="Папка DFF")
+        box.operator("import.ipl", text="Импортировать IPL")
+
+        col = box.column(align=True)
+        col.prop(scene, "export_ipl_path", text="Экспорт IPL")
+        col.prop(scene, "export_ide_path", text="Экспорт IDE")
+        col.prop(scene, "lod_autosearch", text="Автпоиск LOD")
+
         row = box.row()
-        row.operator("export.ipl", text="Export IPL")
-        row.operator("export.ide", text="Export IDE")
-        box.operator("gta.check_errors", text="Check Errors")
+        row.operator("export.ipl", text="Экспорт IPL")
+        row.operator("export.ide", text="Экспорт IDE")
+
+        box.operator("gta.check_errors", text="Проверить ошибки")
 
 # Оператор импорта
 class IMPORT_OT_IPL(bpy.types.Operator):
@@ -258,11 +208,8 @@ class IMPORT_OT_IPL(bpy.types.Operator):
     def execute(self, context):
         ipl_path = context.scene.ipl_path
         dff_folder = context.scene.dff_folder
-        if not os.path.exists(ipl_path):
-            self.report({'ERROR'}, f"IPL файл не найден: {ipl_path}")
-            return {'CANCELLED'}
-        if not os.path.exists(dff_folder):
-            self.report({'ERROR'}, f"Папка DFF не найдена: {dff_folder}")
+        if not os.path.exists(ipl_path) or not os.path.exists(dff_folder):
+            self.report({'ERROR'}, "Проверьте пути к файлам")
             return {'CANCELLED'}
         objects = parse_ipl(ipl_path)
         place_objects(objects, dff_folder)
@@ -410,15 +357,12 @@ class EXPORT_OT_IPL(bpy.types.Operator):
         if not export_ipl_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IPL")
             return {'CANCELLED'}
+        # Добавляем расширение ипл, если его нет
         if not export_ipl_path.lower().endswith('.ipl'):
             export_ipl_path += '.ipl'
         objects = bpy.context.scene.objects
-        try:
-            export_ipl(export_ipl_path, objects, context.scene.lod_autosearch)
-            self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
-        except ValueError as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
+        export_ipl(export_ipl_path, objects, context.scene.lod_autosearch)
+        self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
         return {'FINISHED'}
 
 # Оператор экспорта IDE с добавлением расширения .ide
@@ -430,15 +374,12 @@ class EXPORT_OT_IDE(bpy.types.Operator):
         if not export_ide_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IDE")
             return {'CANCELLED'}
+        # Добавляем расширение .ide, если его нет
         if not export_ide_path.lower().endswith('.ide'):
             export_ide_path += '.ide'
         objects = bpy.context.scene.objects
-        try:
-            export_ide(export_ide_path, objects)
-            self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
-        except ValueError as e:
-            self.report({'ERROR'}, str(e))
-            return {'CANCELLED'}
+        export_ide(export_ide_path, objects)
+        self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
         return {'FINISHED'}
 
 # Оператор проверки ошибок
@@ -457,7 +398,7 @@ class GTA_OT_CheckErrors(bpy.types.Operator):
 
 # Регистрация классов и свойств
 classes = [
-    GTA_SA_IPL_PT_Panel, IMPORT_OT_IPL, EXPORT_OT_IPL, EXPORT_OT_IDE,
+    Xtreme_Byte_PT_Panel, IMPORT_OT_IPL, EXPORT_OT_IPL, EXPORT_OT_IDE,
     GTA_OT_SetValues, GTA_OT_GetTXD, GTA_OT_SetTXD, GTA_OT_GetInterior,
     GTA_OT_SetInterior, GTA_OT_GetDistance, GTA_OT_SetDistance, GTA_OT_GetFlag,
     GTA_OT_SetFlag, GTA_OT_GetLODStart, GTA_OT_SetLODStart, GTA_OT_GetAll,
