@@ -1,4 +1,4 @@
-Xtreme Byte MAP Tool
+Xtreme Byte MAP Editor
 
 Blender-аддон для импорта и экспорта файлов IPL и IDE из игры Grand Theft Auto: San Andreas. Поддерживает загрузку моделей в формате .dff, их размещение в сцене Blender, а также экспорт объектов обратно в форматы IPL и IDE с настройкой параметров (ID, LOD, TXD и т.д.).
 
