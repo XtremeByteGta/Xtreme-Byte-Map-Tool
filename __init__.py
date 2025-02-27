@@ -3,7 +3,7 @@ bl_info = {
     "blender": (2, 80, 0),
     "category": "Import-Export",
     "author": "xtreme byte",
-    "version": (2, 2, 0),
+    "version": (3, 0, 1),
     "location": "View3D > N-Panel > GTA SA IPL",
     "description": "Imports GTA SA IPL files with correct coordinates.",
 }
