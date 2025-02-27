@@ -238,12 +238,12 @@ class GTA_OT_SetValues(bpy.types.Operator):
         selected = bpy.context.selected_objects
         for i, obj in enumerate(selected):
             obj['id'] = id_start + i
-            obj['txd_name'] = context.scene.txd_name
-            obj['interior'] = context.scene.interior
-            obj['distance'] = context.scene.distance
-            obj['flag'] = context.scene.flag
+            obj['txd_name'] = context.scene.txd_name  # Сохраняем указанное имя TXD
+            obj['interior'] = context.scene.interior  # Сохраняем интерьер
+            obj['distance'] = context.scene.distance  # Сохраняем дистанцию
+            obj['flag'] = context.scene.flag          # Сохраняем флаг
             obj['lod'] = context.scene.lod_start + i if obj.name.lower().startswith('lod') else -1
-        self.report({'INFO'}, f"Установлены ID для {len(selected)} объектов")
+        self.report({'INFO'}, f"Установлены настройки для {len(selected)} объектов")
         return {'FINISHED'}
 
 class GTA_OT_GetTXD(bpy.types.Operator):
@@ -336,13 +336,15 @@ class GTA_OT_GetAll(bpy.types.Operator):
     bl_idname = "gta.get_all"
     bl_label = "Get All"
     def execute(self, context):
-        if bpy.context.selected_objects:
-            obj = bpy.context.selected_objects[0]
-            context.scene.txd_name = obj.get('txd_name', '')
-            context.scene.interior = obj.get('interior', 0)
-            context.scene.distance = obj.get('distance', 300.0)
-            context.scene.flag = obj.get('flag', 0)
-            context.scene.lod_start = obj.get('lod', 0)
+        selected = bpy.context.selected_objects
+        for obj in selected:
+            obj['txd_name'] = context.scene.txd_name
+            obj['interior'] = context.scene.interior
+            obj['distance'] = context.scene.distance
+            obj['flag'] = context.scene.flag
+            if obj.name.lower().startswith('lod'):
+                obj['lod'] = context.scene.lod_start
+        self.report({'INFO'}, f"Применены настройки к {len(selected)} объектам")
         return {'FINISHED'}
 
 class GTA_OT_ResetAll(bpy.types.Operator):
@@ -369,7 +371,10 @@ class EXPORT_OT_IPL(bpy.types.Operator):
             
         if not export_ipl_path.lower().endswith('.ipl'):
             export_ipl_path += '.ipl'
-        objects = bpy.context.scene.objects
+        objects = bpy.context.selected_objects 
+        if not objects:
+            self.report({'WARNING'}, "Нет выделенных объектов для экспорта")
+            return {'CANCELLED'}
         export_ipl(export_ipl_path, objects, context.scene.lod_autosearch)
         self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
         return {'FINISHED'}
@@ -385,7 +390,10 @@ class EXPORT_OT_IDE(bpy.types.Operator):
    
         if not export_ide_path.lower().endswith('.ide'):
             export_ide_path += '.ide'
-        objects = bpy.context.scene.objects
+        objects = bpy.context.selected_objects 
+        if not objects:
+            self.report({'WARNING'}, "Нет выделенных объектов для экспорта")
+            return {'CANCELLED'}
         export_ide(export_ide_path, objects)
         self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
         return {'FINISHED'}
