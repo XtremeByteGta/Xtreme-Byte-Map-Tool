@@ -3,49 +3,66 @@ import os
 import bmesh
 from .dff import dff
 
-# Функция для парсинга ипл файла (импорт)
+# Функция для парсинга IPL файла (импорт) с проверкой дубликатов ID и комментариев
 def parse_ipl(ipl_path):
     objects = []
+    id_set = set()  # Множество для отслеживания ID
     with open(ipl_path, 'r') as file:
         lines = file.readlines()
         in_inst_section = False
-        for line in lines:
+        for i, line in enumerate(lines):
             line = line.strip()
             if line.lower() == 'inst':
                 in_inst_section = True
+                print(f"Начало секции 'inst' на строке {i+1}")
                 continue
             elif line.lower() == 'end':
                 in_inst_section = False
+                print(f"Конец секции 'inst' на строке {i+1}")
                 continue
-            if in_inst_section and line:
+            if in_inst_section and line and '#' not in line:  # Пропускаем строки с комментариями
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) >= 10:
                     try:
+                        obj_id = int(parts[0])
+                        if obj_id in id_set:
+                            print(f"Строка {i+1}: Дубликат ID {obj_id} для {parts[1]}")
+                        id_set.add(obj_id)
                         obj = {
                             'id': parts[0],
                             'model_name': parts[1],
                             'interior': parts[2],
                             'pos': (float(parts[3]), float(parts[4]), float(parts[5])),
                             'rot': (float(parts[9]), float(parts[6]), float(parts[7]), float(parts[8])),
-                            'lod': parts[10] if len(parts) > 10 else ''
+                            'lod': parts[10] if len(parts) > 10 else '-1'
                         }
                         objects.append(obj)
+                        print(f"Строка {i+1}: Успешно распарсен объект {obj['model_name']} с ID {obj['id']}")
                     except ValueError as e:
-                        print(f"Ошибка в строке {line}: {e}")
+                        print(f"Ошибка в строке {i+1}: {line} — {e}")
+                else:
+                    print(f"Строка {i+1} пропущена: недостаточно данных ({len(parts)} частей): {line}")
+            elif in_inst_section and '#' in line:
+                print(f"Строка {i+1} пропущена: содержит комментарий: {line}")
+    print(f"Всего распарсено {len(objects)} объектов из IPL")
     return objects
 
-# Функция для загрузки дфф модели
+# Функция для загрузки DFF модели
 def import_dff(model_name, dff_folder):
     dff_path = os.path.join(dff_folder, model_name + '.dff')
     if not os.path.exists(dff_path):
-        print(f"Модель {model_name} не найдена по пути {dff_path}")
+        print(f"Ошибка: Модель {model_name} не найдена по пути {dff_path}")
         return None
 
-    dff_loader = dff()
-    dff_loader.load_file(dff_path)
+    try:
+        dff_loader = dff()
+        dff_loader.load_file(dff_path)
+    except Exception as e:
+        print(f"Ошибка загрузки DFF {model_name}: {e}")
+        return None
 
     if not dff_loader.geometry_list:
-        print(f"Не удалось загрузить геометрию из {model_name}")
+        print(f"Ошибка: Не удалось загрузить геометрию из {model_name}")
         return None
 
     geometry = dff_loader.geometry_list[0]
@@ -65,26 +82,33 @@ def import_dff(model_name, dff_folder):
 
     bm.to_mesh(mesh)
     bm.free()
+    print(f"Успешно загружена модель {model_name}")
     return obj
 
-# Функция для размещения объектов в сцене (импорт)
+# Функция для размещения объектов в сцене (импорт) — без масштабирования
 def place_objects(objects, dff_folder):
     for obj_data in objects:
         model_name = obj_data['model_name']
         obj = import_dff(model_name, dff_folder)
         if obj:
-            scaled_pos = (obj_data['pos'][0] / 100, obj_data['pos'][1] / 100, obj_data['pos'][2] / 100)
-            obj.location = scaled_pos
+            obj.location = obj_data['pos']  # Оригинальные координаты
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = obj_data['rot']
             obj['id'] = int(obj_data['id'])
             obj['interior'] = int(obj_data['interior'])
-            obj['lod'] = int(obj_data['lod']) if obj_data['lod'] else -1
+            obj['lod'] = int(obj_data['lod']) if obj_data['lod'] != '-1' else -1
             bpy.context.collection.objects.link(obj)
+            print(f"Объект {model_name} размещён на {obj.location}")
+        else:
+            # Вместо создания пустого объекта просто пропускаем и логируем
+            print(f"Не удалось загрузить {model_name} из DFF, объект не создан (должен быть на {obj_data['pos']})")
 
-# Функция для экспорта IPL
+# Функция для экспорта IPL с проверкой дубликатов ID — без масштабирования
 def export_ipl(ipl_path, objects, lod_autosearch=False):
     lod_dict = {}
+    id_set = set()  # Множество для проверки дубликатов ID
+    duplicate_ids = []
+
     if lod_autosearch:
         for obj in objects:
             if obj.name.lower().startswith('lod'):
@@ -96,32 +120,51 @@ def export_ipl(ipl_path, objects, lod_autosearch=False):
         for i, obj in enumerate(objects):
             if 'id' not in obj:
                 continue
-            model_name = obj.name
-            pos = (obj.location.x * 100, obj.location.y * 100, obj.location.z * 100)
-            rot = obj.rotation_quaternion
-            interior = obj.get('interior', 0)
-            lod_index = obj.get('lod', -1)
-            if lod_autosearch and model_name in lod_dict:
-                lod_index = lod_dict[model_name].get('id', -1)
-            line = f"{obj['id']}, {model_name}, {interior}, {pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}, {rot[1]:.6f}, {rot[2]:.6f}, {rot[3]:.6f}, {rot[0]:.6f}, {lod_index}\n"
-            file.write(line)
+            obj_id = obj['id']
+            if obj_id in id_set:
+                duplicate_ids.append(obj_id)
+            else:
+                id_set.add(obj_id)
+                model_name = obj.name
+                pos = (obj.location.x, obj.location.y, obj.location.z)  # Оригинальные координаты
+                rot = obj.rotation_quaternion
+                interior = obj.get('interior', 0)
+                lod_index = obj.get('lod', -1)
+                if lod_autosearch and model_name in lod_dict:
+                    lod_index = lod_dict[model_name].get('id', -1)
+                line = f"{obj_id}, {model_name}, {interior}, {pos[0]:.6f}, {pos[1]:.6f}, {pos[2]:.6f}, {rot[1]:.6f}, {rot[2]:.6f}, {rot[3]:.6f}, {rot[0]:.6f}, {lod_index}\n"
+                file.write(line)
         file.write("end\n")
+    
+    if duplicate_ids:
+        raise ValueError(f"Обнаружены дубликаты ID при экспорте IPL: {duplicate_ids}")
     print(f"Экспортировано {len(objects)} объектов в IPL: {ipl_path}")
 
-# Функция для экспорта IDE
+# Функция для экспорта IDE с проверкой дубликатов ID
 def export_ide(ide_path, objects):
+    id_set = set()  # Множество для проверки дубликатов ID
+    duplicate_ids = []
+
     with open(ide_path, 'w') as file:
         file.write("objs\n")
         for obj in objects:
             if 'id' not in obj:
                 continue
-            model_name = obj.name
-            txd_name = obj.get('txd_name', f"{model_name}_tex")
-            distance = obj.get('distance', 300.0)
-            flags = obj.get('flag', 0)
-            line = f"{obj['id']}, {model_name}, {txd_name}, {distance:.1f}, {flags}\n"
-            file.write(line)
+            obj_id = obj['id']
+            if obj_id in id_set:
+                duplicate_ids.append(obj_id)
+            else:
+                id_set.add(obj_id)
+                model_name = obj.name
+                txd_name = obj.get('txd_name', f"{model_name}_tex")
+                distance = obj.get('distance', 300.0)
+                flags = obj.get('flag', 0)
+                line = f"{obj_id}, {model_name}, {txd_name}, {distance:.1f}, {flags}\n"
+                file.write(line)
         file.write("end\n")
+    
+    if duplicate_ids:
+        raise ValueError(f"Обнаружены дубликаты ID при экспорте IDE: {duplicate_ids}")
     print(f"Экспортировано {len(objects)} объектов в IDE: {ide_path}")
 
 # Функция проверки ошибок
@@ -215,8 +258,11 @@ class IMPORT_OT_IPL(bpy.types.Operator):
     def execute(self, context):
         ipl_path = context.scene.ipl_path
         dff_folder = context.scene.dff_folder
-        if not os.path.exists(ipl_path) or not os.path.exists(dff_folder):
-            self.report({'ERROR'}, "Проверьте пути к файлам")
+        if not os.path.exists(ipl_path):
+            self.report({'ERROR'}, f"IPL файл не найден: {ipl_path}")
+            return {'CANCELLED'}
+        if not os.path.exists(dff_folder):
+            self.report({'ERROR'}, f"Папка DFF не найдена: {dff_folder}")
             return {'CANCELLED'}
         objects = parse_ipl(ipl_path)
         place_objects(objects, dff_folder)
@@ -364,15 +410,18 @@ class EXPORT_OT_IPL(bpy.types.Operator):
         if not export_ipl_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IPL")
             return {'CANCELLED'}
-        # Добавляем расширение ипл, если его нет
         if not export_ipl_path.lower().endswith('.ipl'):
             export_ipl_path += '.ipl'
         objects = bpy.context.scene.objects
-        export_ipl(export_ipl_path, objects, context.scene.lod_autosearch)
-        self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
+        try:
+            export_ipl(export_ipl_path, objects, context.scene.lod_autosearch)
+            self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
+        except ValueError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
         return {'FINISHED'}
 
-# Оператор экспорта ид с добавлением расширения ид
+# Оператор экспорта IDE с добавлением расширения .ide
 class EXPORT_OT_IDE(bpy.types.Operator):
     bl_idname = "export.ide"
     bl_label = "Export IDE File"
@@ -381,12 +430,15 @@ class EXPORT_OT_IDE(bpy.types.Operator):
         if not export_ide_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IDE")
             return {'CANCELLED'}
-        # Добавляем расширение .ide, если его нет
         if not export_ide_path.lower().endswith('.ide'):
             export_ide_path += '.ide'
         objects = bpy.context.scene.objects
-        export_ide(export_ide_path, objects)
-        self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
+        try:
+            export_ide(export_ide_path, objects)
+            self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
+        except ValueError as e:
+            self.report({'ERROR'}, str(e))
+            return {'CANCELLED'}
         return {'FINISHED'}
 
 # Оператор проверки ошибок
