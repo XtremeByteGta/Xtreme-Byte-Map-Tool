@@ -3,7 +3,6 @@ import os
 import bmesh
 from .dff import dff
 
-# Функция для парсинга IPL файла (импорт) с улучшенной обработкой комментариев и ошибок
 def parse_ipl(ipl_path):
     objects = []
     with open(ipl_path, 'r') as file:
@@ -19,11 +18,11 @@ def parse_ipl(ipl_path):
                 in_inst_section = False
                 print(f"Конец секции 'inst' на строке {i+1}")
                 continue
-            if in_inst_section and line and '#' not in line:  # Пропускаем строки с комментариями
+            if in_inst_section and line and '#' not in line: 
                 parts = [p.strip() for p in line.split(',')]
                 if len(parts) >= 10:
                     try:
-                        obj_id = int(parts[0])  # Проверяем, что ID — это число
+                        obj_id = int(parts[0])
                         obj = {
                             'id': parts[0],
                             'model_name': parts[1],
@@ -43,7 +42,6 @@ def parse_ipl(ipl_path):
     print(f"Всего распарсено {len(objects)} объектов из IPL")
     return objects
 
-# Функция для загрузки DFF модели
 def import_dff(model_name, dff_folder):
     dff_path = os.path.join(dff_folder, model_name + '.dff')
     if not os.path.exists(dff_path):
@@ -76,13 +74,12 @@ def import_dff(model_name, dff_folder):
     bm.free()
     return obj
 
-# Функция для размещения объектов в сцене (импорт) — без масштабирования
 def place_objects(objects, dff_folder):
     for obj_data in objects:
         model_name = obj_data['model_name']
         obj = import_dff(model_name, dff_folder)
         if obj:
-            obj.location = obj_data['pos']  # Оригинальные координаты
+            obj.location = obj_data['pos'] 
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = obj_data['rot']
             obj['id'] = int(obj_data['id'])
@@ -90,7 +87,6 @@ def place_objects(objects, dff_folder):
             obj['lod'] = int(obj_data['lod']) if obj_data['lod'] else -1
             bpy.context.collection.objects.link(obj)
 
-# Функция для экспорта IPL — без масштабирования
 def export_ipl(ipl_path, objects, lod_autosearch=False):
     lod_dict = {}
     if lod_autosearch:
@@ -105,7 +101,7 @@ def export_ipl(ipl_path, objects, lod_autosearch=False):
             if 'id' not in obj:
                 continue
             model_name = obj.name
-            pos = (obj.location.x, obj.location.y, obj.location.z)  # Оригинальные координаты
+            pos = (obj.location.x, obj.location.y, obj.location.z)
             rot = obj.rotation_quaternion
             interior = obj.get('interior', 0)
             lod_index = obj.get('lod', -1)
@@ -116,7 +112,6 @@ def export_ipl(ipl_path, objects, lod_autosearch=False):
         file.write("end\n")
     print(f"Экспортировано {len(objects)} объектов в IPL: {ipl_path}")
 
-# Функция для экспорта IDE
 def export_ide(ide_path, objects):
     with open(ide_path, 'w') as file:
         file.write("objs\n")
@@ -132,7 +127,6 @@ def export_ide(ide_path, objects):
         file.write("end\n")
     print(f"Экспортировано {len(objects)} объектов в IDE: {ide_path}")
 
-# Функция проверки ошибок
 def check_errors(objects):
     errors = []
     warnings = []
@@ -151,7 +145,6 @@ def check_errors(objects):
 
     return errors, warnings
 
-# Панель на N-панели с новым названием "Xtreme Byte" и уникальным интерфейсом
 class Xtreme_Byte_PT_Panel(bpy.types.Panel):
     bl_label = "Xtreme Byte"
     bl_idname = "XTREME_PT_BYTE"
@@ -163,13 +156,13 @@ class Xtreme_Byte_PT_Panel(bpy.types.Panel):
         layout = self.layout
         scene = context.scene
 
-        # Секция "Настройка объектов" (аналог Part 1)
+        # Секция Настройка объектов
         box = layout.box()
         box.label(text="Настройка объектов", icon='OBJECT_DATA')
         box.prop(scene, "id_start", text="Начальный ID")
         box.operator("gta.set_values", text="Применить настройки")
 
-        # Секция "Параметры моделей" (аналог Part 2)
+        # Секция Параметры моделей
         box = layout.box()
         box.label(text="Параметры моделей", icon='MODIFIER')
         col = box.column(align=True)
@@ -180,10 +173,10 @@ class Xtreme_Byte_PT_Panel(bpy.types.Panel):
         col.prop(scene, "lod_start", text="Начало LOD")
 
         row = box.row()
-        row.operator("gta.get_all", text="Получить все")
+        row.operator("gta.get_all", text="Применить все")
         row.operator("gta.reset_all", text="Сбросить все")
 
-        # Секция "Импорт/Экспорт" (аналог Part 3)
+        # Секция Импорт/Экспорт
         box = layout.box()
         box.label(text="Импорт и Экспорт", icon='FILE')
         box.prop(scene, "ipl_path", text="Путь к IPL")
@@ -201,7 +194,6 @@ class Xtreme_Byte_PT_Panel(bpy.types.Panel):
 
         box.operator("gta.check_errors", text="Проверить ошибки")
 
-# Оператор импорта
 class IMPORT_OT_IPL(bpy.types.Operator):
     bl_idname = "import.ipl"
     bl_label = "Import IPL File"
@@ -216,7 +208,6 @@ class IMPORT_OT_IPL(bpy.types.Operator):
         self.report({'INFO'}, f"Импортировано {len(objects)} объектов")
         return {'FINISHED'}
 
-# Оператор установки ID (Set Values)
 class GTA_OT_SetValues(bpy.types.Operator):
     bl_idname = "gta.set_values"
     bl_label = "Set Values"
@@ -233,7 +224,6 @@ class GTA_OT_SetValues(bpy.types.Operator):
         self.report({'INFO'}, f"Установлены ID для {len(selected)} объектов")
         return {'FINISHED'}
 
-# Операторы GET/SET для каждого поля
 class GTA_OT_GetTXD(bpy.types.Operator):
     bl_idname = "gta.get_txd"
     bl_label = "Get TXD"
@@ -320,7 +310,6 @@ class GTA_OT_SetLODStart(bpy.types.Operator):
                 obj['lod'] = context.scene.lod_start
         return {'FINISHED'}
 
-# Оператор GET ALL
 class GTA_OT_GetAll(bpy.types.Operator):
     bl_idname = "gta.get_all"
     bl_label = "Get All"
@@ -334,7 +323,6 @@ class GTA_OT_GetAll(bpy.types.Operator):
             context.scene.lod_start = obj.get('lod', 0)
         return {'FINISHED'}
 
-# Оператор Re Set All Values
 class GTA_OT_ResetAll(bpy.types.Operator):
     bl_idname = "gta.reset_all"
     bl_label = "Re Set All Values"
@@ -348,7 +336,6 @@ class GTA_OT_ResetAll(bpy.types.Operator):
                 obj['lod'] = context.scene.lod_start
         return {'FINISHED'}
 
-# Оператор экспорта IPL с добавлением расширения .ipl
 class EXPORT_OT_IPL(bpy.types.Operator):
     bl_idname = "export.ipl"
     bl_label = "Export IPL File"
@@ -357,7 +344,7 @@ class EXPORT_OT_IPL(bpy.types.Operator):
         if not export_ipl_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IPL")
             return {'CANCELLED'}
-        # Добавляем расширение ипл, если его нет
+            
         if not export_ipl_path.lower().endswith('.ipl'):
             export_ipl_path += '.ipl'
         objects = bpy.context.scene.objects
@@ -365,7 +352,6 @@ class EXPORT_OT_IPL(bpy.types.Operator):
         self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IPL: {export_ipl_path}")
         return {'FINISHED'}
 
-# Оператор экспорта IDE с добавлением расширения .ide
 class EXPORT_OT_IDE(bpy.types.Operator):
     bl_idname = "export.ide"
     bl_label = "Export IDE File"
@@ -374,7 +360,7 @@ class EXPORT_OT_IDE(bpy.types.Operator):
         if not export_ide_path:
             self.report({'ERROR'}, "Укажите путь для экспорта IDE")
             return {'CANCELLED'}
-        # Добавляем расширение .ide, если его нет
+   
         if not export_ide_path.lower().endswith('.ide'):
             export_ide_path += '.ide'
         objects = bpy.context.scene.objects
@@ -382,7 +368,7 @@ class EXPORT_OT_IDE(bpy.types.Operator):
         self.report({'INFO'}, f"Экспортировано {len(objects)} объектов в IDE: {export_ide_path}")
         return {'FINISHED'}
 
-# Оператор проверки ошибок
+
 class GTA_OT_CheckErrors(bpy.types.Operator):
     bl_idname = "gta.check_errors"
     bl_label = "Check Errors"
@@ -396,7 +382,7 @@ class GTA_OT_CheckErrors(bpy.types.Operator):
         self.report({'INFO' if not errors else 'WARNING'}, f"Найдено ошибок: {len(errors)}, предупреждений: {len(warnings)}")
         return {'FINISHED'}
 
-# Регистрация классов и свойств
+
 classes = [
     Xtreme_Byte_PT_Panel, IMPORT_OT_IPL, EXPORT_OT_IPL, EXPORT_OT_IDE,
     GTA_OT_SetValues, GTA_OT_GetTXD, GTA_OT_SetTXD, GTA_OT_GetInterior,
