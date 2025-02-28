@@ -4,7 +4,7 @@ bl_info = {
     "category": "Import-Export",
     "author": "xtreme byte",
     "version": (1, 1, 0),
-    "location": "View3D > N-Panel > GTA SA IPL",
+    "location": "View3D > N-Panel > Xtreme Byte",
     "description": "Imports GTA SA IPL files with correct coordinates.",
 }
 
