@@ -1,3 +1,25 @@
+# MIT License
+#
+# Copyright (c) 2025 xtreme byte
+#
+# Permission is hereby granted, free of charge, to any person obtaining a copy
+# of this software and associated documentation files (the "Software"), to deal
+# in the Software without restriction, including without limitation the rights
+# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+# copies of the Software, and to permit persons to whom the Software is
+# furnished to do so, subject to the following conditions:
+#
+# The above copyright notice and this permission notice shall be included in all
+# copies or substantial portions of the Software.
+#
+# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+# SOFTWARE.
+
 import bpy
 import bmesh
 import os
@@ -5,22 +27,22 @@ import mathutils
 from enum import Enum
 
 class WaterType(Enum):
-    DEFAULT_INVISIBLE = 0  # Обычная / Невидимая
-    DEFAULT_VISIBLE = 1    # Обычная / Видимая
-    SHALLOW_INVISIBLE = 2  # Мелководье / Невидимая
-    SHALLOW_VISIBLE = 3    # Мелководье / Видимая
+    DEFAULT_INVISIBLE = 0  
+    DEFAULT_VISIBLE = 1   
+    SHALLOW_INVISIBLE = 2 
+    SHALLOW_VISIBLE = 3  
 
 class WaterVertex:
     def __init__(self, position, direction=(0.0, 0.0), wave_height=0.0, unk_height=0.0):
-        self.position = position  # Координаты вершины (x, y, z)
-        self.direction = direction  # Направление течения (u, v)
-        self.wave_height = wave_height  # Высота волн
-        self.unk_height = unk_height  # Неизвестный параметр (unk height)
+        self.position = position  
+        self.direction = direction  
+        self.wave_height = wave_height  
+        self.unk_height = unk_height 
 
 class Water:
     def __init__(self, vertices, flag=WaterType.DEFAULT_VISIBLE):
-        self.vertices = vertices  # Список вершин (3 или 4)
-        self.flag = flag  # Тип воды и видимость
+        self.vertices = vertices  
+        self.flag = flag  
 
 def parse_water_dat(water_path):
     waters = []
@@ -37,10 +59,10 @@ def parse_water_dat(water_path):
                     continue
                 parts = [p.strip() for p in line.split()]
                 print(f"Строка {i+1}: найдено {len(parts)} частей: {parts}")
-                if len(parts) >= 22:  # Минимум для треугольника: 7 значений на вершину * 3 + flag = 22
+                if len(parts) >= 22:  
                     try:
                         vertices = []
-                        # Первая вершина
+                
                         v1 = WaterVertex(
                             position=(float(parts[0]), float(parts[1]), float(parts[2])),
                             direction=(float(parts[3]), float(parts[4])),
@@ -48,7 +70,7 @@ def parse_water_dat(water_path):
                             wave_height=float(parts[6])
                         )
                         vertices.append(v1)
-                        # Вторая вершина
+                      
                         v2 = WaterVertex(
                             position=(float(parts[7]), float(parts[8]), float(parts[9])),
                             direction=(float(parts[10]), float(parts[11])),
@@ -56,7 +78,7 @@ def parse_water_dat(water_path):
                             wave_height=float(parts[13])
                         )
                         vertices.append(v2)
-                        # Третья вершина
+                    
                         v3 = WaterVertex(
                             position=(float(parts[14]), float(parts[15]), float(parts[16])),
                             direction=(float(parts[17]), float(parts[18])),
@@ -64,8 +86,8 @@ def parse_water_dat(water_path):
                             wave_height=float(parts[20])
                         )
                         vertices.append(v3)
-                        # Четвёртая вершина (если есть)
-                        if len(parts) == 29:  # Для четырёхугольника
+                     
+                        if len(parts) == 29:  
                             v4 = WaterVertex(
                                 position=(float(parts[21]), float(parts[22]), float(parts[23])),
                                 direction=(float(parts[24]), float(parts[25])),
@@ -74,7 +96,7 @@ def parse_water_dat(water_path):
                             )
                             vertices.append(v4)
                             flag = WaterType(int(parts[28]))
-                        else:  # Для треугольника
+                        else:  
                             flag = WaterType(int(parts[21]))
                         water = Water(vertices=vertices, flag=flag)
                         waters.append(water)
@@ -97,25 +119,24 @@ def create_water_mesh(water, name_prefix="Water"):
     for v in water.vertices:
         bm_verts.append(bm.verts.new(v.position))
     if len(water.vertices) == 4:
-        bm.faces.new([bm_verts[0], bm_verts[1], bm_verts[3], bm_verts[2]])  # Порядок как в MaxScript: 1,2,4,3
-    else:  # Треугольник
-        bm.faces.new([bm_verts[0], bm_verts[2], bm_verts[1]])  # Порядок как в MaxScript: 1,3,2
+        bm.faces.new([bm_verts[0], bm_verts[1], bm_verts[3], bm_verts[2]])  
+    else: 
+        bm.faces.new([bm_verts[0], bm_verts[2], bm_verts[1]]) 
     bm.to_mesh(mesh)
     bm.free()
 
-    # Сохраняем параметры вершин как пользовательские свойства
+
     for i, v in enumerate(water.vertices):
         obj[f"vertex_{i}_direction"] = v.direction
         obj[f"vertex_{i}_wave_height"] = v.wave_height
         obj[f"vertex_{i}_unk_height"] = v.unk_height
     obj["flag"] = water.flag.value
 
-    # Устанавливаем видимость
     is_visible = water.flag in [WaterType.DEFAULT_VISIBLE, WaterType.SHALLOW_VISIBLE]
     obj.hide_viewport = not is_visible
     obj.hide_render = not is_visible
 
-    # Добавляем материал для визуального различия
+
     mat = bpy.data.materials.new(name=f"WaterMat_{id(water)}")
     mat.use_nodes = True
     nodes = mat.node_tree.nodes
@@ -127,11 +148,10 @@ def create_water_mesh(water, name_prefix="Water"):
     principled.inputs["Alpha"].default_value = 0.5
     links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
-    # Настраиваем прозрачность через свойства материала
-    mat.blend_method = 'BLEND'  # Устанавливаем режим смешивания
-    # Для корректного отображения теней в Eevee включите Screen Space Shadows:
-    # Render Properties > Shadows > Screen Space Shadows
-    mat.use_screen_refraction = True  # Включаем преломление для более реалистичного вида воды
+  
+    mat.blend_method = 'BLEND'  
+
+    mat.use_screen_refraction = True  
 
     mesh.materials.append(mat)
 
@@ -145,10 +165,10 @@ def import_water(water_path):
         grouped_objects[water.flag].append(obj)
         bpy.context.collection.objects.link(obj)
 
-    # Группируем объекты по флагу, как в MaxScript
+ 
     for flag, objects in grouped_objects.items():
         if objects:
-            # Создаём родительский объект для группы
+    
             parent = bpy.data.objects.new(f"WaterGroup_{flag.name}", None)
             parent["flag"] = flag.value
             bpy.context.collection.objects.link(parent)
@@ -170,10 +190,10 @@ def export_water_dat(water_path, objects):
             flag = WaterType(obj["flag"])
             verts = [v.co for v in mesh.vertices]
             if len(verts) == 4:
-                # Для четырёхугольника пишем в порядке 1,2,4,3 (как в MaxScript)
+ 
                 order = [0, 1, 3, 2]
             else:
-                # Для треугольника пишем в порядке 1,3,2
+     
                 order = [0, 2, 1]
             line_parts = []
             for i in order:
@@ -213,7 +233,7 @@ class WATER_OT_Export(bpy.types.Operator):
         if not water_path.lower().endswith('.dat'):
             water_path += '.dat'
         objects = []
-        # Экспортируем только объекты с параметрами воды, включая дочерние
+  
         for obj in bpy.context.selected_objects:
             if "flag" in obj:
                 objects.append(obj)
@@ -239,19 +259,19 @@ class WATER_OT_SetParameters(bpy.types.Operator):
                 continue
             updated_objects += 1
             num_vertices = len(obj.data.vertices)
-            # Применяем параметры к каждой вершине
+    
             for i in range(num_vertices):
                 obj[f"vertex_{i}_direction"] = (scene.water_speed_x, scene.water_speed_y)
                 obj[f"vertex_{i}_wave_height"] = scene.wave_height
                 obj[f"vertex_{i}_unk_height"] = scene.unk_height
-            # Применяем флаг
+        
             obj["flag"] = int(scene.water_type)
-            # Обновляем видимость
+      
             flag = WaterType(int(scene.water_type))
             is_visible = flag in [WaterType.DEFAULT_VISIBLE, WaterType.SHALLOW_VISIBLE]
             obj.hide_viewport = not is_visible
             obj.hide_render = not is_visible
-            # Обновляем материал
+ 
             if obj.data.materials:
                 mat = obj.data.materials[0]
                 is_shallow = flag in [WaterType.SHALLOW_INVISIBLE, WaterType.SHALLOW_VISIBLE]
@@ -268,7 +288,7 @@ class WATER_OT_GetParameters(bpy.types.Operator):
         scene = context.scene
         if bpy.context.selected_objects and "flag" in bpy.context.selected_objects[0]:
             obj = bpy.context.selected_objects[0]
-            # Берём параметры из первой вершины (как в MaxScript)
+
             direction = obj.get("vertex_0_direction", (0.0, 0.0))
             scene.water_speed_x = direction[0]
             scene.water_speed_y = direction[1]
@@ -294,9 +314,9 @@ class WATER_OT_CheckFile(bpy.types.Operator):
                     if not line or line.startswith('#') or line == "processed":
                         continue
                     parts = [p.strip() for p in line.split()]
-                    if len(parts) in {22, 29}:  # Треугольник или четырёхугольник
+                    if len(parts) in {22, 29}:
                         try:
-                            _ = [float(x) for x in parts[:-1]]  # Проверяем, что все значения, кроме последнего, — числа
+                            _ = [float(x) for x in parts[:-1]] 
                             flag = int(parts[-1])
                             if flag in {0, 1, 2, 3}:
                                 valid_lines += 1
