@@ -76,6 +76,8 @@ class Xtreme_Byte_PT_Panel(bpy.types.Panel):
         box.label(text="Импорт и Экспорт", icon='FILE')
         box.prop(scene, "ipl_path", text="Путь к IPL")
         box.prop(scene, "dff_folder", text="Папка DFF")
+        box.prop(scene, "img_path", text="Путь к IMG")
+        box.prop(scene, "dir_path", text="Путь к DIR (опционально)")
         box.operator("import.ipl", text="Импортировать IPL")
 
         col = box.column(align=True)
@@ -104,11 +106,19 @@ class IMPORT_OT_IPL(bpy.types.Operator):
     def execute(self, context):
         ipl_path = context.scene.ipl_path
         dff_folder = context.scene.dff_folder
-        if not os.path.exists(ipl_path) or not os.path.exists(dff_folder):
-            self.report({'ERROR'}, "Проверьте пути к файлам")
+        img_path = context.scene.img_path
+        dir_path = context.scene.dir_path
+        
+        if not os.path.exists(ipl_path):
+            self.report({'ERROR'}, "Проверьте путь к IPL")
             return {'CANCELLED'}
+        
+        if not img_path and not os.path.exists(dff_folder):
+            self.report({'ERROR'}, "Проверьте путь к папке DFF или IMG")
+            return {'CANCELLED'}
+        
         objects = parse_ipl(ipl_path)
-        place_objects(objects, dff_folder)
+        place_objects(objects, dff_folder if not img_path else None, img_path, dir_path)
         self.report({'INFO'}, f"Импортировано {len(objects)} объектов")
         return {'FINISHED'}
 
@@ -228,6 +238,9 @@ def register():
     bpy.types.Scene.flag = bpy.props.IntProperty(name="Flag", default=0)
     bpy.types.Scene.lod_start = bpy.props.IntProperty(name="LOD Start", default=0)
     bpy.types.Scene.lod_autosearch = bpy.props.BoolProperty(name="LOD AutoSearch", default=False)
+    # Новые свойства для IMG
+    bpy.types.Scene.img_path = bpy.props.StringProperty(name="IMG Path", subtype='FILE_PATH')
+    bpy.types.Scene.dir_path = bpy.props.StringProperty(name="DIR Path (optional)", subtype='FILE_PATH')
     # Свойства для water.dat
     bpy.types.Scene.water_path = bpy.props.StringProperty(name="Water Path", subtype='FILE_PATH')
     bpy.types.Scene.water_path_export = bpy.props.StringProperty(name="Export Water Path", subtype='FILE_PATH')
@@ -260,6 +273,8 @@ def unregister():
     del bpy.types.Scene.flag
     del bpy.types.Scene.lod_start
     del bpy.types.Scene.lod_autosearch
+    del bpy.types.Scene.img_path
+    del bpy.types.Scene.dir_path
     del bpy.types.Scene.water_path
     del bpy.types.Scene.water_path_export
     del bpy.types.Scene.water_speed_x
