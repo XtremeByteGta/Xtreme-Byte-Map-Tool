@@ -23,6 +23,7 @@
 import bpy
 import os
 import bmesh
+from struct import unpack
 from .dff import dff
 
 def parse_ipl(ipl_path):
@@ -64,15 +65,65 @@ def parse_ipl(ipl_path):
     print(f"Всего распарсено {len(objects)} объектов из IPL")
     return objects
 
-def import_dff(model_name, dff_folder):
-    dff_path = os.path.join(dff_folder, model_name + '.dff')
-    if not os.path.exists(dff_path):
-        print(f"Модель {model_name} не найдена по пути {dff_path}")
+def parse_img(img_path, dir_path=None):
+    """Парсит IMG-архив и возвращает словарь {имя_файла: (смещение, размер)}."""
+    files = {}
+    
+    if dir_path:  # Версия 1 с .dir файлом
+        if not os.path.exists(dir_path):
+            print(f"Файл .dir не найден: {dir_path}")
+            return files
+        with open(dir_path, 'rb') as dir_file:
+            dir_data = dir_file.read()
+            for i in range(0, len(dir_data), 32):
+                offset, size, name = unpack('<II24s', dir_data[i:i+32])
+                name = name.decode('ascii').rstrip('\0').lower()
+                files[name] = (offset * 2048, size * 2048)  # Смещение и размер в секторах (2048 байт)
+    else:  # Версия 2
+        with open(img_path, 'rb') as img_file:
+            header = img_file.read(8)
+            if header[:4] != b'VER2':
+                print(f"Неподдерживаемая версия IMG или файл поврежден: {img_path}")
+                return files
+            num_entries = unpack('<I', header[4:8])[0]
+            for _ in range(num_entries):
+                offset, size, name = unpack('<II24s', img_file.read(32))
+                name = name.decode('ascii').rstrip('\0').lower()
+                files[name] = (offset * 2048, size * 2048)
+    
+    return files
+
+def extract_dff_from_img(img_path, model_name, files_dict):
+    """Извлекает DFF-файл из IMG в память."""
+    model_name = model_name.lower()
+    if model_name not in files_dict and model_name + '.dff' not in files_dict:
+        print(f"Модель {model_name} не найдена в IMG-архиве")
         return None
+    
+    key = model_name if model_name in files_dict else model_name + '.dff'
+    offset, size = files_dict[key]
+    
+    with open(img_path, 'rb') as img_file:
+        img_file.seek(offset)
+        dff_data = img_file.read(size)
+    return dff_data
 
+def import_dff(model_name, dff_source):
+    """Импортирует DFF из папки или данных IMG."""
     dff_loader = dff()
-    dff_loader.load_file(dff_path)
-
+    
+    if isinstance(dff_source, str):  # Путь к папке
+        dff_path = os.path.join(dff_source, model_name + '.dff')
+        if not os.path.exists(dff_path):
+            print(f"Модель {model_name} не найдена по пути {dff_path}")
+            return None
+        dff_loader.load_file(dff_path)
+    else:  # Данные из IMG
+        if dff_source is None:
+            print(f"Данные для модели {model_name} не предоставлены")
+            return None
+        dff_loader.load_memory(dff_source)
+    
     if not dff_loader.geometry_list:
         print(f"Не удалось загрузить геометрию из {model_name}")
         return None
@@ -96,12 +147,25 @@ def import_dff(model_name, dff_folder):
     bm.free()
     return obj
 
-def place_objects(objects, dff_folder):
+def place_objects(objects, dff_folder=None, img_path=None, dir_path=None):
+    """Размещает объекты из IPL, используя DFF из папки или IMG."""
+    files_dict = None
+    if img_path:
+        if not os.path.exists(img_path):
+            print(f"IMG-архив не найден: {img_path}")
+            return
+        files_dict = parse_img(img_path, dir_path)
+    
     for obj_data in objects:
         model_name = obj_data['model_name']
-        obj = import_dff(model_name, dff_folder)
+        if img_path and files_dict:
+            dff_data = extract_dff_from_img(img_path, model_name, files_dict)
+            obj = import_dff(model_name, dff_data)
+        else:
+            obj = import_dff(model_name, dff_folder)
+        
         if obj:
-            obj.location = obj_data['pos'] 
+            obj.location = obj_data['pos']
             obj.rotation_mode = 'QUATERNION'
             obj.rotation_quaternion = obj_data['rot']
             obj['id'] = int(obj_data['id'])
