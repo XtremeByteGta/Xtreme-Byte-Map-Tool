@@ -66,10 +66,10 @@ def parse_ipl(ipl_path):
     return objects
 
 def parse_img(img_path, dir_path=None):
-    """Парсит IMG-архив и возвращает словарь {имя_файла: (смещение, размер)}."""
+
     files = {}
     
-    if dir_path:  # Версия 1 с .dir файлом
+    if dir_path:
         if not os.path.exists(dir_path):
             print(f"Файл .dir не найден: {dir_path}")
             return files
@@ -78,7 +78,7 @@ def parse_img(img_path, dir_path=None):
             for i in range(0, len(dir_data), 32):
                 offset, size, name = unpack('<II24s', dir_data[i:i+32])
                 name = name.decode('ascii').rstrip('\0').lower()
-                files[name] = (offset * 2048, size * 2048)  # Смещение и размер в секторах (2048 байт)
+                files[name] = (offset * 2048, size * 2048) 
     else:  # Версия 2
         with open(img_path, 'rb') as img_file:
             header = img_file.read(8)
@@ -94,7 +94,7 @@ def parse_img(img_path, dir_path=None):
     return files
 
 def extract_dff_from_img(img_path, model_name, files_dict):
-    """Извлекает DFF-файл из IMG в память."""
+ 
     model_name = model_name.lower()
     if model_name not in files_dict and model_name + '.dff' not in files_dict:
         print(f"Модель {model_name} не найдена в IMG-архиве")
@@ -109,16 +109,16 @@ def extract_dff_from_img(img_path, model_name, files_dict):
     return dff_data
 
 def import_dff(model_name, dff_source):
-    """Импортирует DFF из папки или данных IMG."""
+
     dff_loader = dff()
     
-    if isinstance(dff_source, str):  # Путь к папке
+    if isinstance(dff_source, str): 
         dff_path = os.path.join(dff_source, model_name + '.dff')
         if not os.path.exists(dff_path):
             print(f"Модель {model_name} не найдена по пути {dff_path}")
             return None
         dff_loader.load_file(dff_path)
-    else:  # Данные из IMG
+    else:  
         if dff_source is None:
             print(f"Данные для модели {model_name} не предоставлены")
             return None
@@ -148,7 +148,7 @@ def import_dff(model_name, dff_source):
     return obj
 
 def place_objects(objects, dff_folder=None, img_path=None, dir_path=None):
-    """Размещает объекты из IPL, используя DFF из папки или IMG."""
+
     files_dict = None
     if img_path:
         if not os.path.exists(img_path):
