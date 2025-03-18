@@ -24,7 +24,7 @@
 
 ## 🔧 **Установка**
 1. **Скачай** ZIP-архив с аддоном:  
-   👉 [Скачать последнюю версию](https://github.com/XtremeByteGta/Xtreme-Byte-Map-Tool)  
+   👉 [Скачать последнюю версию](https://github.com/XtremeByteGta/Xtreme-Byte-Map-Tool/archive/refs/heads/main.zip)  
 2. В **Blender** открой **Edit** → **Preferences** → **Add-ons**  
 3. Нажми **Install**, выбери ZIP и активируй аддон  
 4. **Готово!** 🎉  
