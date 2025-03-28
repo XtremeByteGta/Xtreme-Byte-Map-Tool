@@ -39,7 +39,9 @@
 ---
 
 ## 💡 Screenshots
-📷 *Examples of the tool in action coming soon!*
+
+https://i.postimg.cc/LsdnQ7Mb/image-2025-03-28-20-02-50.png
+https://i.postimg.cc/g2LxDp1h/photo-2025-03-09-14-44-49.jpg
 
 ---
 
