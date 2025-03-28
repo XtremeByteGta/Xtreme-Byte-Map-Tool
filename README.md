@@ -1,49 +1,48 @@
-# 📌 **Xtreme Byte Map Tool**
-🚀 **Аддон для Blender для работы с картой GTA San Andreas**  
-
-
----
-
-## 🔥 **Что это?**
-**Xtreme Byte Map Tool** — это мощный инструмент для **импорта и экспорта карт GTA San Andreas** прямо в **Blender**. С его помощью ты можешь:  
-✅ **Импортировать IPL** файлы (объекты и координаты)  
-✅ **Загружать DFF** модели  
-✅ **Импортировать текстуры** (PNG/TXD)  
-✅ **Редактировать карту и экспортировать обратно**  
+# 📌 Xtreme Byte Map Tool
+🚀 **Blender Add-on for Working with GTA San Andreas Maps**
 
 ---
 
-## 🎮 **Функции**
-- 🔹 **Импорт IPL** — загружай карту и редактируй её в Blender  
-- 🔹 **Импорт DFF** — добавляй 3D-модели без внешних конвертеров  
-- 🔹 **Поддержка UV** — корректная работа с текстурами  
-- 🔹 **Выбор источника текстур** — TXD или PNG  
-- 🔹 **Экспорт обратно в GTA SA**  
+## 🔥 What is it?
+**Xtreme Byte Map Tool** is a powerful tool for **importing and exporting GTA San Andreas maps** directly into **Blender**. With it, you can:  
+✅ **Import IPL** files (objects and coordinates)  
+✅ **Load DFF** models  
+✅ **Import textures** (PNG/TXD)  
+✅ **Edit the map and export it back**
 
 ---
 
-## 🔧 **Установка**
-1. **Скачай** ZIP-архив с аддоном:  
-   👉 [Скачать последнюю версию](https://github.com/XtremeByteGta/Xtreme-Byte-Map-Tool/archive/refs/heads/main.zip)  
-2. В **Blender** открой **Edit** → **Preferences** → **Add-ons**  
-3. Нажми **Install**, выбери ZIP и активируй аддон  
-4. **Готово!** 🎉  
+## 🎮 Features
+- 🔹 **IPL Import** — Load the map and edit it in Blender  
+- 🔹 **DFF Import** — Add 3D models without external converters  
+- 🔹 **UV Support** — Proper texture handling  
+- 🔹 **Texture Source Selection** — TXD or PNG  
+- 🔹 **Export Back to GTA SA**
 
 ---
 
-## 🚀 **Как использовать?**
-1. Открой **N-панель** в Blender (нажми `N`)  
-2. В разделе **Xtreme Byte Map Tool** выбери **IPL и DFF файлы**  
-3. Укажи путь к **текстурам (TXD или PNG)**  
-4. Нажми **Импорт** и начни редактировать карту!  
+## 🔧 Installation
+1. **Download** the ZIP archive with the add-on:  
+   👉 [Download the latest version](https://github.com/XtremeByteGta/Xtreme-Byte-Map-Tool/archive/refs/heads/main.zip)  
+2. In **Blender**, go to **Edit** → **Preferences** → **Add-ons**  
+3. Click **Install**, select the ZIP file, and activate the add-on  
+4. **Done!** 🎉
 
 ---
 
-## 💡 **Скриншоты**
-📷 *Скоро здесь появятся примеры работы!*  
+## 🚀 How to Use?
+1. Open the **N-panel** in Blender (press `N`)  
+2. In the **Xtreme Byte Map Tool** section, select **IPL and DFF files**  
+3. Specify the path to **textures (TXD or PNG)**  
+4. Click **Import** and start editing the map!
 
 ---
 
-## ❤️ **Поддержка проекта**
-Если тебе нравится этот инструмент, **ставь звезду ⭐ на GitHub** и делись им с другими!  
-✉ **Есть вопросы?** Открывай `issue`.  
+## 💡 Screenshots
+📷 *Examples of the tool in action coming soon!*
+
+---
+
+## ❤️ Support the Project
+If you like this tool, **give it a star ⭐ on GitHub** and share it with others!  
+✉ **Have questions?** Open an [issue](https://github.com/XtremeByteGta/Xtreme-Byte-Map-Tool/issues).
