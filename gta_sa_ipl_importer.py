@@ -109,150 +109,198 @@ def extract_dff_from_img(img_path, model_name, files_dict):
     return dff_data
 
 def import_dff(model_name, dff_source):
+    print(f"Начало импорта модели: {model_name}")
     dff_loader = dff()
     
-    if isinstance(dff_source, str): 
-        dff_path = os.path.join(dff_source, model_name + '.dff')
-        if not os.path.exists(dff_path):
-            print(f"Модель {model_name} не найдена по пути {dff_path}")
-            return None
-        dff_loader.load_file(dff_path)
-    else:  
-        if dff_source is None:
-            print(f"Данные для модели {model_name} не предоставлены")
-            return None
-        dff_loader.load_memory(dff_source)
+    # Загрузка данных DFF
+    try:
+        if isinstance(dff_source, str): 
+            dff_path = os.path.join(dff_source, model_name + '.dff')
+            if not os.path.exists(dff_path):
+                print(f"Ошибка: Файл {dff_path} не найден")
+                return None
+            print(f"Загрузка DFF из файла: {dff_path}")
+            dff_loader.load_file(dff_path)
+        else:  
+            if dff_source is None:
+                print(f"Ошибка: Данные для модели {model_name} не предоставлены")
+                return None
+            print(f"Загрузка DFF из памяти для модели: {model_name}")
+            dff_loader.load_memory(dff_source)
+    except Exception as e:
+        print(f"Ошибка при загрузке DFF для {model_name}: {e}")
+        return None
     
     if not dff_loader.geometry_list:
-        print(f"Не удалось загрузить геометрию из {model_name}")
+        print(f"Ошибка: Не удалось загрузить геометрию для {model_name}")
         return None
 
     geometry = dff_loader.geometry_list[0]
+    print(f"Геометрия загружена: {len(geometry.vertices)} вершин, {len(geometry.triangles)} треугольников")
+
+    # Создание меша и объекта
     mesh = bpy.data.meshes.new(model_name)
     obj = bpy.data.objects.new(model_name, mesh)
-
     bm = bmesh.new()
+
+    # Добавление вершин
+    print(f"Добавление {len(geometry.vertices)} вершин в меш")
     for vert in geometry.vertices:
         bm.verts.new((vert.x, vert.y, vert.z))
     bm.verts.ensure_lookup_table()
 
-    # Создаем UV-слои
+    # Создание UV-слоёв
     uv_layers = []
     for i in range(len(geometry.uv_layers)):
         uv_layer = bm.loops.layers.uv.new(f"UVMap_{i}")
         uv_layers.append(uv_layer)
         print(f"Создан UV-слой: UVMap_{i}")
 
-    # Создаем материалы
+    # Обработка материалов
     material_indices = {}
-    print(f"Всего материалов в геометрии: {len(geometry.materials)}")
-    for i, mat in enumerate(geometry.materials):
-        mat_name = f"{model_name}_mat_{i}"
-        if mat.textures and len(mat.textures) > 0:
-            tex_name = mat.textures[0].name
-            mat_name = tex_name if tex_name else mat_name
-            print(f"Материал {i}: {mat_name} (текстура: {tex_name}.png)")
-        else:
-            print(f"Материал {i}: {mat_name} (без текстуры, используется цвет)")
-        
-        bpy_mat = bpy.data.materials.new(name=mat_name)
-        bpy_mat.use_nodes = True
-        nodes = bpy_mat.node_tree.nodes
-        links = bpy_mat.node_tree.links
-        principled = nodes.new("ShaderNodeBsdfPrincipled")
-        output = nodes.get("Material Output")
-        links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+    if geometry.materials:
+        print(f"Обнаружено {len(geometry.materials)} материалов")
+        for i, mat in enumerate(geometry.materials):
+            mat_name = f"{model_name}_mat_{i}"
+            has_texture = mat.textures and len(mat.textures) > 0
 
-        if mat.textures and len(mat.textures) > 0:
-            tex_name = mat.textures[0].name + ".png"
-            if tex_name not in bpy.data.images:
-                image = bpy.data.images.new(name=tex_name, width=1024, height=1024)
-                image.filepath = "//" + tex_name
-                image.source = 'FILE'
+            if has_texture:
+                tex_name = mat.textures[0].name
+                mat_name = tex_name if tex_name else mat_name
+                print(f"Материал {i}: {mat_name} с текстурой {tex_name}.png")
             else:
-                image = bpy.data.images[tex_name]
-            
-            tex_node = nodes.new("ShaderNodeTexImage")
-            tex_node.image = image
-            links.new(tex_node.outputs["Color"], principled.inputs["Base Color"])
-        
-        if mat.color:
-            principled.inputs["Base Color"].default_value = (
-                mat.color.r / 255.0, mat.color.g / 255.0, mat.color.b / 255.0, mat.color.a / 255.0
-            )
-        
-        mesh.materials.append(bpy_mat)
-        material_indices[i] = i
+                print(f"Материал {i}: {mat_name} без текстуры, используется только цвет")
 
-    # Используем треугольники из Bin Mesh PLG, если они есть
+            # Создаём материал только если есть текстура или цвет
+            if has_texture or mat.color:
+                bpy_mat = bpy.data.materials.new(name=mat_name)
+                bpy_mat.use_nodes = True
+                nodes = bpy_mat.node_tree.nodes
+                links = bpy_mat.node_tree.links
+
+                # Создание нод
+                principled = nodes.new("ShaderNodeBsdfPrincipled")
+                output = nodes.get("Material Output")
+                if not output:
+                    output = nodes.new("ShaderNodeOutputMaterial")
+                    print(f"Создана нода Material Output для материала {mat_name}")
+                
+                links.new(principled.outputs["BSDF"], output.inputs["Surface"])
+                print(f"Связь BSDF -> Surface создана для материала {mat_name}")
+
+                # Добавление текстуры, если есть
+                if has_texture:
+                    tex_name += ".png"
+                    if tex_name not in bpy.data.images:
+                        image = bpy.data.images.new(name=tex_name, width=1024, height=1024)
+                        image.filepath = "//" + tex_name
+                        image.source = 'FILE'
+                        print(f"Создана новая текстура: {tex_name}")
+                    else:
+                        image = bpy.data.images[tex_name]
+                        print(f"Использована существующая текстура: {tex_name}")
+                    
+                    tex_node = nodes.new("ShaderNodeTexImage")
+                    tex_node.image = image
+                    links.new(tex_node.outputs["Color"], principled.inputs["Base Color"])
+                    print(f"Текстура {tex_name} подключена к Base Color")
+
+                # Установка цвета, если есть
+                if mat.color:
+                    color = (mat.color.r / 255.0, mat.color.g / 255.0, mat.color.b / 255.0, mat.color.a / 255.0)
+                    principled.inputs["Base Color"].default_value = color
+                    print(f"Установлен цвет материала {mat_name}: {color}")
+
+                mesh.materials.append(bpy_mat)
+                material_indices[i] = i
+            else:
+                print(f"Материал {i} пропущен: нет текстуры и цвета")
+
+    # Использование треугольников
     triangles = geometry.extensions.get('mat_split', geometry.triangles)
-    print(f"Используется источник треугольников: {'Bin Mesh PLG' if triangles is not geometry.triangles else 'Geometry'}")
+    print(f"Источник треугольников: {'Bin Mesh PLG' if triangles is not geometry.triangles else 'Geometry'}, всего {len(triangles)}")
 
-    # Подсчитываем использование материалов
+    # Подсчёт использования материалов
     material_usage = {i: 0 for i in range(len(geometry.materials))}
     for tri in triangles:
         if tri.material in material_usage:
             material_usage[tri.material] += 1
-        else:
-            material_usage[tri.material] = 1
 
-    print("Использование материалов треугольниками:")
+    print("Использование материалов:")
     for mat_idx, count in material_usage.items():
         print(f"Материал {mat_idx}: {count} треугольников")
 
-    # Добавляем треугольники и применяем UV-координаты
+    # Добавление треугольников
+    skipped_triangles = 0
     for tri in triangles:
         try:
             face = bm.faces.new((bm.verts[tri.b], bm.verts[tri.a], bm.verts[tri.c]))
             if tri.material in material_indices:
                 face.material_index = material_indices[tri.material]
             else:
-                print(f"Предупреждение: треугольник ссылается на несуществующий материал {tri.material}, используется материал 0")
                 face.material_index = 0
+                print(f"Треугольник использует несуществующий материал {tri.material}, присвоен материал 0")
             
+            # Применение UV-координат
             for uv_layer_idx, uv_layer in enumerate(uv_layers):
                 if uv_layer_idx < len(geometry.uv_layers):
                     for i, loop in enumerate(face.loops):
                         vert_idx = [tri.b, tri.a, tri.c][i]
                         uv = geometry.uv_layers[uv_layer_idx][vert_idx]
                         loop[uv_layer].uv = (uv.u, uv.v)
-        except ValueError:
+        except ValueError as e:
+            skipped_triangles += 1
+            print(f"Пропущен треугольник в модели {model_name}: {e}")
             continue
 
+    if skipped_triangles > 0:
+        print(f"Пропущено {skipped_triangles} треугольников из-за ошибок")
+
+    # Финализация меша
     bm.to_mesh(mesh)
     bm.free()
 
     if geometry.uv_layers and len(geometry.uv_layers) > 0:
         mesh.uv_layers[0].name = "UVMap"
         mesh.uv_layers[0].active = True
-    
+        print(f"UV-слой активирован: UVMap")
+
+    print(f"Импорт модели {model_name} завершён успешно")
     return obj
 
 def place_objects(objects, dff_folder=None, img_path=None, dir_path=None):
-
     files_dict = None
     if img_path:
         if not os.path.exists(img_path):
-            print(f"IMG-архив не найден: {img_path}")
+            print(f"Ошибка: IMG-архив не найден: {img_path}")
             return
         files_dict = parse_img(img_path, dir_path)
+        print(f"IMG-архив распарсен, найдено {len(files_dict)} файлов")
     
     for obj_data in objects:
         model_name = obj_data['model_name']
-        if img_path and files_dict:
-            dff_data = extract_dff_from_img(img_path, model_name, files_dict)
-            obj = import_dff(model_name, dff_data)
-        else:
-            obj = import_dff(model_name, dff_folder)
-        
-        if obj:
-            obj.location = obj_data['pos']
-            obj.rotation_mode = 'QUATERNION'
-            obj.rotation_quaternion = obj_data['rot']
-            obj['id'] = int(obj_data['id'])
-            obj['interior'] = int(obj_data['interior'])
-            obj['lod'] = int(obj_data['lod']) if obj_data['lod'] else -1
-            bpy.context.collection.objects.link(obj)
+        print(f"Обработка объекта: {model_name}")
+        try:
+            if img_path and files_dict:
+                dff_data = extract_dff_from_img(img_path, model_name, files_dict)
+                obj = import_dff(model_name, dff_data)
+            else:
+                obj = import_dff(model_name, dff_folder)
+            
+            if obj:
+                obj.location = obj_data['pos']
+                obj.rotation_mode = 'QUATERNION'
+                obj.rotation_quaternion = obj_data['rot']
+                obj['id'] = int(obj_data['id'])
+                obj['interior'] = int(obj_data['interior'])
+                obj['lod'] = int(obj_data['lod']) if obj_data['lod'] else -1
+                bpy.context.collection.objects.link(obj)
+                print(f"Объект {model_name} успешно размещён")
+            else:
+                print(f"Пропущен объект {model_name} из-за ошибки импорта")
+        except Exception as e:
+            print(f"Ошибка при размещении объекта {model_name}: {e}")
+            continue
 
 def export_ipl(ipl_path, objects, lod_autosearch=False):
     lod_dict = {}
