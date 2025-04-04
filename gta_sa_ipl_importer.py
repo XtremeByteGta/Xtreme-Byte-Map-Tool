@@ -21,8 +21,52 @@
 # SOFTWARE.
 
 import bpy
+import sys
 import os
 import bmesh
+import importlib
+import subprocess
+
+# Путь для установки Pillow внутри аддона
+addon_dir = os.path.dirname(__file__)
+pil_path = os.path.join(addon_dir, "PIL")
+if pil_path not in sys.path:
+    sys.path.insert(0, pil_path)
+
+def ensure_pillow_installed():
+    """Проверяет наличие Pillow и устанавливает его в папку аддона, если отсутствует."""
+    try:
+        from PIL import Image
+        print("Pillow уже доступен")
+        return True
+    except ImportError:
+        print("Pillow не найден, пытаюсь установить в папку аддона...")
+        try:
+            # Используем встроенный Python Blender'а
+            python_exe = os.path.join(sys.prefix, "bin", "python.exe") if os.name == 'nt' else sys.executable
+            # Убеждаемся, что pip доступен
+            subprocess.check_call([python_exe, "-m", "ensurepip"])
+            subprocess.check_call([python_exe, "-m", "pip", "install", "--upgrade", "pip"])
+            # Устанавливаем Pillow в папку PIL внутри аддона
+            subprocess.check_call([python_exe, "-m", "pip", "install", "Pillow", "--target", pil_path, "--upgrade"])
+            # Очищаем кэш импорта
+            importlib.invalidate_caches()
+            # Проверяем импорт
+            from PIL import Image
+            print("Pillow успешно установлен в папку аддона")
+            return True
+        except subprocess.CalledProcessError as e:
+            print(f"Ошибка установки Pillow: {e}")
+            print("Проверьте интернет-соединение или попробуйте установить вручную.")
+            return False
+        except Exception as e:
+            print(f"Не удалось установить Pillow: {e}")
+            return False
+
+# Вызываем проверку при загрузке аддона
+if not ensure_pillow_installed():
+    print("Внимание: Pillow не установлен, импорт текстур работать не будет!")
+    
 from struct import unpack
 from .dff import dff
 from .txd import txd  # Импорт парсера TXD
