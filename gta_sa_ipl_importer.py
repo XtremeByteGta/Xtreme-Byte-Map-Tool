@@ -25,6 +25,8 @@ import os
 import bmesh
 from struct import unpack
 from .dff import dff
+from .txd import txd  # Импорт парсера TXD
+from PIL import Image  # Для сохранения текстур в PNG
 
 def parse_ipl(ipl_path):
     objects = []
@@ -66,7 +68,6 @@ def parse_ipl(ipl_path):
     return objects
 
 def parse_img(img_path, dir_path=None):
-
     files = {}
     
     if dir_path:
@@ -93,22 +94,67 @@ def parse_img(img_path, dir_path=None):
     
     return files
 
-def extract_dff_from_img(img_path, model_name, files_dict):
- 
+def extract_dff_and_txd_from_img(img_path, model_name, files_dict):
     model_name = model_name.lower()
-    if model_name not in files_dict and model_name + '.dff' not in files_dict:
-        print(f"Модель {model_name} не найдена в IMG-архиве")
-        return None
+    dff_key = model_name if model_name in files_dict else model_name + '.dff'
+    txd_key = model_name if model_name in files_dict else model_name + '.txd'
     
-    key = model_name if model_name in files_dict else model_name + '.dff'
-    offset, size = files_dict[key]
+    dff_data = None
+    txd_data = None
     
-    with open(img_path, 'rb') as img_file:
-        img_file.seek(offset)
-        dff_data = img_file.read(size)
-    return dff_data
+    if dff_key not in files_dict:
+        print(f"Модель {model_name}.dff не найдена в IMG-архиве")
+    else:
+        offset, size = files_dict[dff_key]
+        with open(img_path, 'rb') as img_file:
+            img_file.seek(offset)
+            dff_data = img_file.read(size)
+        print(f"Извлечён {dff_key} из IMG")
 
-def import_dff(model_name, dff_source):
+    if txd_key not in files_dict:
+        print(f"Текстуры {model_name}.txd не найдены в IMG-архиве")
+    else:
+        offset, size = files_dict[txd_key]
+        with open(img_path, 'rb') as img_file:
+            img_file.seek(offset)
+            txd_data = img_file.read(size)
+        print(f"Извлечён {txd_key} из IMG")
+    
+    return dff_data, txd_data
+
+def extract_textures_from_txd(txd_data, output_dir):
+    if not txd_data:
+        print("Нет данных TXD для обработки")
+        return {}
+    
+    texture_dict = {}
+    txd_loader = txd()
+    txd_loader.load_memory(txd_data)
+    
+    os.makedirs(output_dir, exist_ok=True)
+    
+    for texture in txd_loader.native_textures:
+        # Конвертируем текстуру в RGBA (уровень 0 — основная текстура)
+        rgba_data = texture.to_rgba(level=0)
+        width = texture.get_width(0)
+        height = texture.get_height(0)
+        
+        if rgba_data:
+            # Создаём изображение из RGBA данных
+            img = Image.frombytes("RGBA", (width, height), rgba_data)
+            texture_path = os.path.join(output_dir, f"{texture.name}.png")
+            img.save(texture_path)
+            texture_dict[texture.name] = texture_path
+            print(f"Сохранена текстура: {texture_path}")
+        else:
+            print(f"Не удалось декодировать текстуру {texture.name}")
+    
+    return texture_dict
+
+def import_dff(model_name, dff_source, texture_dict=None):
+    if texture_dict is None:
+        texture_dict = {}
+    
     print(f"Начало импорта модели: {model_name}")
     dff_loader = dff()
     
@@ -167,60 +213,44 @@ def import_dff(model_name, dff_source):
             if has_texture:
                 tex_name = mat.textures[0].name
                 mat_name = tex_name if tex_name else mat_name
-                print(f"Материал {i}: {mat_name} с текстурой {tex_name}.png")
+                print(f"Материал {i}: {mat_name} с текстурой {tex_name}")
             else:
                 print(f"Материал {i}: {mat_name} без текстуры, используется только цвет")
 
-            # Создаём материал только если есть текстура или цвет
-            if has_texture or mat.color:
-                bpy_mat = bpy.data.materials.new(name=mat_name)
-                bpy_mat.use_nodes = True
-                nodes = bpy_mat.node_tree.nodes
-                links = bpy_mat.node_tree.links
+            bpy_mat = bpy.data.materials.new(name=mat_name)
+            bpy_mat.use_nodes = True
+            nodes = bpy_mat.node_tree.nodes
+            links = bpy_mat.node_tree.links
 
-                # Создание нод
-                principled = nodes.new("ShaderNodeBsdfPrincipled")
-                output = nodes.get("Material Output")
-                if not output:
-                    output = nodes.new("ShaderNodeOutputMaterial")
-                    print(f"Создана нода Material Output для материала {mat_name}")
-                
-                links.new(principled.outputs["BSDF"], output.inputs["Surface"])
-                print(f"Связь BSDF -> Surface создана для материала {mat_name}")
+            # Создание нод
+            principled = nodes.new("ShaderNodeBsdfPrincipled")
+            output = nodes.get("Material Output") or nodes.new("ShaderNodeOutputMaterial")
+            links.new(principled.outputs["BSDF"], output.inputs["Surface"])
 
-                # Добавление текстуры, если есть
-                if has_texture:
-                    tex_name += ".png"
-                    if tex_name not in bpy.data.images:
-                        image = bpy.data.images.new(name=tex_name, width=1024, height=1024)
-                        image.filepath = "//" + tex_name
-                        image.source = 'FILE'
-                        print(f"Создана новая текстура: {tex_name}")
-                    else:
-                        image = bpy.data.images[tex_name]
-                        print(f"Использована существующая текстура: {tex_name}")
-                    
+            # Добавление текстуры, если есть
+            if has_texture and tex_name in texture_dict:
+                texture_path = texture_dict[tex_name]
+                if os.path.exists(texture_path):
                     tex_node = nodes.new("ShaderNodeTexImage")
-                    tex_node.image = image
+                    tex_node.image = bpy.data.images.load(texture_path)
                     links.new(tex_node.outputs["Color"], principled.inputs["Base Color"])
-                    print(f"Текстура {tex_name} подключена к Base Color")
+                    print(f"Текстура {tex_name} загружена из {texture_path}")
+                else:
+                    print(f"Текстура {tex_name} не найдена на диске")
 
-                # Установка цвета, если есть
-                if mat.color:
-                    color = (mat.color.r / 255.0, mat.color.g / 255.0, mat.color.b / 255.0, mat.color.a / 255.0)
-                    principled.inputs["Base Color"].default_value = color
-                    print(f"Установлен цвет материала {mat_name}: {color}")
+            # Установка цвета, если есть
+            if mat.color:
+                color = (mat.color.r / 255.0, mat.color.g / 255.0, mat.color.b / 255.0, mat.color.a / 255.0)
+                principled.inputs["Base Color"].default_value = color
+                print(f"Установлен цвет материала {mat_name}: {color}")
 
-                mesh.materials.append(bpy_mat)
-                material_indices[i] = i
-            else:
-                print(f"Материал {i} пропущен: нет текстуры и цвета")
+            mesh.materials.append(bpy_mat)
+            material_indices[i] = i
 
     # Использование треугольников
     triangles = geometry.extensions.get('mat_split', geometry.triangles)
     print(f"Источник треугольников: {'Bin Mesh PLG' if triangles is not geometry.triangles else 'Geometry'}, всего {len(triangles)}")
 
-    # Подсчёт использования материалов
     material_usage = {i: 0 for i in range(len(geometry.materials))}
     for tri in triangles:
         if tri.material in material_usage:
@@ -230,7 +260,6 @@ def import_dff(model_name, dff_source):
     for mat_idx, count in material_usage.items():
         print(f"Материал {mat_idx}: {count} треугольников")
 
-    # Добавление треугольников
     skipped_triangles = 0
     for tri in triangles:
         try:
@@ -239,9 +268,7 @@ def import_dff(model_name, dff_source):
                 face.material_index = material_indices[tri.material]
             else:
                 face.material_index = 0
-                print(f"Треугольник использует несуществующий материал {tri.material}, присвоен материал 0")
             
-            # Применение UV-координат
             for uv_layer_idx, uv_layer in enumerate(uv_layers):
                 if uv_layer_idx < len(geometry.uv_layers):
                     for i, loop in enumerate(face.loops):
@@ -277,13 +304,33 @@ def place_objects(objects, dff_folder=None, img_path=None, dir_path=None):
         files_dict = parse_img(img_path, dir_path)
         print(f"IMG-архив распарсен, найдено {len(files_dict)} файлов")
     
+    # Проверяем, сохранён ли .blend-файл
+    if bpy.data.filepath:
+        texture_output_dir = os.path.join(bpy.path.abspath("//"), "textures")
+    else:
+        import tempfile
+        texture_output_dir = os.path.join(tempfile.gettempdir(), "gta_textures")
+        print(f"Файл .blend не сохранён, текстуры будут сохранены во временную папку: {texture_output_dir}")
+    
+    # Создаём папку для текстур только если нужен импорт текстур
+    import_textures = bpy.context.scene.import_textures
+    if import_textures:
+        try:
+            os.makedirs(texture_output_dir, exist_ok=True)
+        except PermissionError as e:
+            print(f"Ошибка создания папки {texture_output_dir}: {e}")
+            print("Попробуйте запустить Blender от имени администратора или сохранить .blend в другой директории")
+            return
+    
     for obj_data in objects:
         model_name = obj_data['model_name']
         print(f"Обработка объекта: {model_name}")
         try:
             if img_path and files_dict:
-                dff_data = extract_dff_from_img(img_path, model_name, files_dict)
-                obj = import_dff(model_name, dff_data)
+                dff_data, txd_data = extract_dff_and_txd_from_img(img_path, model_name, files_dict)
+                # Извлекаем текстуры только если включена опция
+                texture_dict = extract_textures_from_txd(txd_data, texture_output_dir) if import_textures else {}
+                obj = import_dff(model_name, dff_data, texture_dict)
             else:
                 obj = import_dff(model_name, dff_folder)
             
