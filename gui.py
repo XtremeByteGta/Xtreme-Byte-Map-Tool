@@ -78,6 +78,7 @@ class Xtreme_Byte_PT_Panel(bpy.types.Panel):
         box.prop(scene, "dff_folder", text="Папка DFF")
         box.prop(scene, "img_path", text="Путь к IMG")
         box.prop(scene, "dir_path", text="Путь к DIR (опционально)")
+        box.prop(scene, "import_textures", text="Импорт текстур из TXD")  # Новая галочка
         box.operator("import.ipl", text="Импортировать IPL")
 
         col = box.column(align=True)
@@ -238,10 +239,8 @@ def register():
     bpy.types.Scene.flag = bpy.props.IntProperty(name="Flag", default=0)
     bpy.types.Scene.lod_start = bpy.props.IntProperty(name="LOD Start", default=0)
     bpy.types.Scene.lod_autosearch = bpy.props.BoolProperty(name="LOD AutoSearch", default=False)
-    # Новые свойства для IMG
     bpy.types.Scene.img_path = bpy.props.StringProperty(name="IMG Path", subtype='FILE_PATH')
     bpy.types.Scene.dir_path = bpy.props.StringProperty(name="DIR Path (optional)", subtype='FILE_PATH')
-    # Свойства для water.dat
     bpy.types.Scene.water_path = bpy.props.StringProperty(name="Water Path", subtype='FILE_PATH')
     bpy.types.Scene.water_path_export = bpy.props.StringProperty(name="Export Water Path", subtype='FILE_PATH')
     bpy.types.Scene.water_speed_x = bpy.props.FloatProperty(name="Water Speed X", default=0.0)
@@ -257,6 +256,12 @@ def register():
             ('3', "Мелководье / Видимая", "Shallow / Visible")
         ],
         default='1'
+    )
+    # Добавляем галочку для импорта текстур
+    bpy.types.Scene.import_textures = bpy.props.BoolProperty(
+        name="Импорт текстур из TXD",
+        description="Если включено, текстуры будут извлечены из TXD и применены к моделям",
+        default=False
     )
 
 def unregister():
@@ -282,3 +287,4 @@ def unregister():
     del bpy.types.Scene.wave_height
     del bpy.types.Scene.unk_height
     del bpy.types.Scene.water_type
+    del bpy.types.Scene.import_textures  # Удаляем новое свойство
