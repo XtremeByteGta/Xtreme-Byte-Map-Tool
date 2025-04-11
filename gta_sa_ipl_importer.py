@@ -303,12 +303,14 @@ def import_dff(model_name, dff_source, texture_dict=None):
                             print(f"Текстура {tex_name} не найдена по пути {texture_path}")
                     except Exception as e:
                         print(f"Ошибка загрузки текстуры {tex_name}: {e}")
-                # Если текстуры не импортируются, задаём только имя файла
+                # Если текстуры не импортируются, задаём относительный путь, предполагая, что текстура в той же папке
                 else:
-                    tex_node.image = bpy.data.images.new(name=f"{tex_name}.png", width=1, height=1)
+                    tex_image_name = f"{tex_name}.png"
+                    tex_node.image = bpy.data.images.new(name=tex_image_name, width=1, height=1)
                     tex_node.image.source = 'FILE'
-                    tex_node.image.filepath = f"{tex_name}.png"  # Только имя файла
-                    print(f"Задана текстура {tex_name}.png для поиска в папке с .blend")
+                    # Задаём относительный путь вида "//tex_name.png"
+                    tex_node.image.filepath = f"//{tex_image_name}"
+                    print(f"Задана текстура {tex_image_name} с относительным путём для поиска в папке с .blend")
                 links.new(tex_node.outputs["Color"], principled.inputs["Base Color"])
             # Если текстуры нет, используем цвет, если он есть
             elif mat.color:
